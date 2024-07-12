@@ -11,7 +11,8 @@ import 'dart:convert';
 class ChatScreen extends StatefulWidget {
   final File imageFile;
   final String? conversationId;
-  const ChatScreen({super.key, required this.imageFile, this.conversationId});
+  final bool isVideo;
+  const ChatScreen({super.key, required this.imageFile, this.conversationId, required this.isVideo });
 
   @override
   _ChatScreenState createState() => _ChatScreenState();

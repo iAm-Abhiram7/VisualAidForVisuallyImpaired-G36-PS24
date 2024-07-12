@@ -6,6 +6,7 @@ class Conversation {
   String imageDescription;
   List<Message> messages;
   DateTime timestamp;
+  bool isVideo; // New field
 
   Conversation({
     this.id,
@@ -13,6 +14,7 @@ class Conversation {
     required this.imageDescription,
     required this.messages,
     required this.timestamp,
+    this.isVideo = false, // Default to false for existing conversations
   });
 
   Map<String, dynamic> toMap() {
@@ -21,6 +23,7 @@ class Conversation {
       'imageDescription': imageDescription,
       'messages': messages.map((message) => message.toMap()).toList(),
       'timestamp': Timestamp.fromDate(timestamp),
+      'isVideo': isVideo, // Include isVideo in the map
     };
   }
 
@@ -35,6 +38,7 @@ class Conversation {
         ),
       ),
       timestamp: (map['timestamp'] as Timestamp).toDate(),
+      isVideo: map['isVideo'] ?? false, // Read isVideo from the map, default to false if not present
     );
   }
 }
