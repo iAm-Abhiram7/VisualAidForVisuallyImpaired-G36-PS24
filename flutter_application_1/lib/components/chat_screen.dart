@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_application_1/components/conversation_model.dart';
 import 'package:flutter_tts/flutter_tts.dart';
@@ -84,6 +85,8 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _sendImage() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
     setState(() {
       _messages.add({
         'type': 'image',
@@ -95,10 +98,12 @@ class _ChatScreenState extends State<ChatScreen> {
     _scrollToBottom();
 
     final conversation = Conversation(
+      userId: user.uid,
       imageUrl: _currentImage!.path,
       imageDescription: '',
       messages: [],
       timestamp: DateTime.now(),
+      isVideo: widget.isVideo,
     );
 
     final conversationRef = await FirebaseFirestore.instance

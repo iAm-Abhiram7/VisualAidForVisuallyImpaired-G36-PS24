@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_application_1/components/conversation_model.dart';
 import 'chat_screen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class ChatHistoryScreen extends StatefulWidget {
   @override
@@ -11,6 +12,7 @@ class ChatHistoryScreen extends StatefulWidget {
 
 class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
   List<Conversation> conversations = [];
+  String? currentUserId;
 
   @override
   void initState() {
@@ -18,12 +20,22 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
     _getConversations();
   }
 
+   Future<void> _getCurrentUser() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      setState(() {
+        currentUserId = user.uid;
+      });
+      _getConversations();
+    }
+  }
+
   Future<void> _getConversations() async {
+    if (currentUserId == null) return;
     final conversationsSnapshot = await FirebaseFirestore.instance
         .collection('conversations')
         .orderBy('timestamp', descending: true)
         .get();
-
     final conversationsList = conversationsSnapshot.docs.map((doc) {
       final conversationData = doc.data();
       return Conversation.fromMap({...conversationData, 'id': doc.id});
@@ -36,7 +48,6 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
 
   Future<void> _deleteConversation(String? conversationId) async {
     if (conversationId == null) {
-      print('Error: Conversation ID is null');
       return;
     }
     await FirebaseFirestore.instance
