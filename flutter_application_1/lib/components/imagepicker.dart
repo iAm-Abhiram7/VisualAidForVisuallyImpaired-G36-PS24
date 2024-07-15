@@ -46,7 +46,7 @@ class _ImagePickerScreenState extends State<ImagePickerScreen> {
       body: GestureDetector(
         onTapUp: (details) {
           final screenWidth = MediaQuery.of(context).size.width;
-          if (details.localPosition.dx > screenWidth / 2) {
+          if (details.globalPosition.dx > screenWidth / 2) {
             // Tap on the right side, open the camera for image
             _pickMedia(ImageSource.camera, false);
           } else {
@@ -114,7 +114,13 @@ class _ImagePickerScreenState extends State<ImagePickerScreen> {
                           ),
               ),
               const SizedBox(height: 30),
-              // Removed the buttons for picking media from the camera
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  Text('Tap left side for video', style: TextStyle(fontSize: 16)),
+                  Text('Tap right side for image', style: TextStyle(fontSize: 16)),
+                ],
+              ),
             ],
           ),
         ),
