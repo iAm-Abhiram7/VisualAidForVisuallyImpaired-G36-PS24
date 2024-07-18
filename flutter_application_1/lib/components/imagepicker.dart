@@ -143,7 +143,7 @@ class _ImagePickerScreenState extends State<ImagePickerScreen> {
         context,
         MaterialPageRoute(
           builder: (context) => ChatScreen(
-            imageFile: selectedFile!,
+            mediaFile: selectedFile!,
             isVideo: isVideo,
           ),
         ),

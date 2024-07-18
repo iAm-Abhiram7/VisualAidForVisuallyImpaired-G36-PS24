@@ -6,14 +6,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_application_1/components/conversation_model.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:ffmpeg_kit_flutter/ffmpeg_kit.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
 class ChatScreen extends StatefulWidget {
-  final File imageFile;
+  final File mediaFile;
   final String? conversationId;
   final bool isVideo;
-  const ChatScreen({super.key, required this.imageFile, this.conversationId, required this.isVideo });
+  
+  const ChatScreen({super.key, required this.mediaFile, this.conversationId, required this.isVideo});
 
   @override
   _ChatScreenState createState() => _ChatScreenState();
@@ -32,6 +35,9 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _imageSent = false;
   int _tapCount = 0;
   Timer? _tapTimer;
+  String? _videoCaption;
+  File? _representativeFrame;
+  bool _captionGenerated = false;
 
   @override
   void initState() {
@@ -39,11 +45,11 @@ class _ChatScreenState extends State<ChatScreen> {
     flutterTts = FlutterTts();
     _speechToText = stt.SpeechToText();
     _conversationId = widget.conversationId;
-    _currentImage = widget.imageFile;
+    _currentImage = widget.mediaFile;
     if (_conversationId != null) {
       _loadExistingConversation();
     } else {
-      _sendImage();
+      _sendMedia();
     }
   }
 
@@ -75,21 +81,26 @@ class _ChatScreenState extends State<ChatScreen> {
               })
           .toList();
       _messages.insert(0, {
-        'type': 'image',
+        'type': widget.isVideo ? 'video' : 'image',
         'message': conversation.imageUrl,
       });
       _imageSent = true;
+      _videoCaption = conversation.imageDescription;
     });
+
+    if (widget.isVideo) {
+      _representativeFrame = await extractRepresentativeFrame(_currentImage!);
+    }
 
     _scrollToBottom();
   }
 
-  Future<void> _sendImage() async {
+  Future<void> _sendMedia() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
     setState(() {
       _messages.add({
-        'type': 'image',
+        'type': widget.isVideo ? 'video' : 'image',
         'message': _currentImage!.path,
       });
       _imageSent = true;
@@ -97,10 +108,21 @@ class _ChatScreenState extends State<ChatScreen> {
 
     _scrollToBottom();
 
+    if (widget.isVideo) {
+      _videoCaption = await _getVideoCaption(_currentImage!);
+      setState(() {
+        _messages.add({
+          'type': 'response',
+          'message': "Video caption: $_videoCaption",
+        });
+        _captionGenerated = true;
+      });
+    }
+
     final conversation = Conversation(
       userId: user.uid,
       imageUrl: _currentImage!.path,
-      imageDescription: '',
+      imageDescription: _videoCaption ?? '',
       messages: [],
       timestamp: DateTime.now(),
       isVideo: widget.isVideo,
@@ -125,7 +147,19 @@ class _ChatScreenState extends State<ChatScreen> {
     _textController.clear();
     _scrollToBottom();
 
-    String response = await _getVQAResponse(message, _currentImage!);
+    String response;
+    if (widget.isVideo) {
+      if (_representativeFrame == null) {
+        _representativeFrame = await extractRepresentativeFrame(_currentImage!);
+      }
+      if (_representativeFrame != null) {
+        response = await _getVQAResponse("$_videoCaption. $message", _representativeFrame!);
+      } else {
+        response = "Sorry, I couldn't process the video frame. Please try again.";
+      }
+    } else {
+      response = await _getVQAResponse(message, _currentImage!);
+    }
 
     setState(() {
       _messages.add({
@@ -157,7 +191,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<String> _getVQAResponse(String question, File image) async {
-    var request = http.MultipartRequest('POST', Uri.parse('http://10.0.2.2:5000/vqa'));
+    var request = http.MultipartRequest('POST', Uri.parse('https://3868-34-74-237-14.ngrok-free.app/vqa'));
     request.fields['question'] = question;
     request.files.add(await http.MultipartFile.fromPath('image', image.path));
 
@@ -171,23 +205,36 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  Future<void> _startListening() async {
-    bool available = await _speechToText.initialize();
-    if (available) {
-      setState(() {
-        _isListening = true;
-      });
-      _speechToText.listen(
-        onResult: (result) async {
-          if (result.finalResult) {
-            String recognizedWords = result.recognizedWords;
-            if (recognizedWords.isNotEmpty) {
-              await _sendMessage(recognizedWords);
-            }
-            await _stopListening();  // Stop listening after sending the message
-          }
-        },
-      );
+  Future<String> _getVideoCaption(File video) async {
+    var captionRequest = http.MultipartRequest('POST', Uri.parse('https://3868-34-74-237-14.ngrok-free.app/caption'));
+    captionRequest.files.add(await http.MultipartFile.fromPath('video', video.path));
+
+    var captionResponse = await captionRequest.send();
+    if (captionResponse.statusCode == 200) {
+      var captionData = await captionResponse.stream.bytesToString();
+      var decodedCaption = json.decode(captionData);
+      return decodedCaption['caption'];
+    } else {
+      return 'Error generating caption: ${captionResponse.statusCode}';
+    }
+  }
+
+  Future<File?> extractRepresentativeFrame(File video) async {
+    try {
+      final tempDir = await getTemporaryDirectory();
+      final framePath = '${tempDir.path}/representative_frame.jpg';
+      
+      final result = await FFmpegKit.execute('-i ${video.path} -vf select=\'eq(n,0)\' -vframes 1 $framePath');
+      
+      if (await result.getReturnCode() == 0) {
+        return File(framePath);
+      } else {
+        print('FFmpeg process exited with error: ${await result.getOutput()}');
+        return null;
+      }
+    } catch (e) {
+      print('Error extracting frame: $e');
+      return null;
     }
   }
   
@@ -255,6 +302,15 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ),
         );
+      case 'video':
+        return Align(
+          alignment: Alignment.center,
+          child: Container(
+            padding: EdgeInsets.all(16),
+            margin: EdgeInsets.all(10),
+            child: Icon(Icons.video_file, size: 100),
+          ),
+        );
       default:
         return Container();
     }
@@ -312,7 +368,7 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Image Chat', style: TextStyle(fontSize: 28)),
+        title: Text(widget.isVideo ? 'Video Chat' : 'Image Chat', style: TextStyle(fontSize: 28)),
         backgroundColor: Colors.blue,
       ),
       body: GestureDetector(
@@ -344,10 +400,13 @@ class _ChatScreenState extends State<ChatScreen> {
                       onSubmitted: (value) {
                         if (_imageSent) {
                           _sendMessage(value);
-                          _textController.clear();
                         }
                       },
                     ),
+                  ),
+                  IconButton(
+                    icon: Icon(_isListening ? Icons.mic : Icons.mic_none),
+                    onPressed: _listen,
                   ),
                 ],
               ),

@@ -17,10 +17,10 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
   @override
   void initState() {
     super.initState();
-    _getConversations();
+    _getCurrentUser();
   }
 
-   Future<void> _getCurrentUser() async {
+  Future<void> _getCurrentUser() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       setState(() {
@@ -57,7 +57,7 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
     _getConversations(); // Refresh the list after deletion
   }
 
-  Widget _buildMediaWidget(String imageUrl, bool isVideo) {
+  Widget _buildMediaWidget(String mediaUrl, bool isVideo) {
     if (isVideo) {
       return Container(
         width: 60,
@@ -66,10 +66,10 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
         child: Icon(Icons.play_circle_fill, color: Colors.white, size: 30),
       );
     } else {
-      if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+      if (mediaUrl.startsWith('http://') || mediaUrl.startsWith('https://')) {
         // Network image
         return Image.network(
-          imageUrl,
+          mediaUrl,
           width: 60,
           height: 60,
           fit: BoxFit.cover,
@@ -84,7 +84,7 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
         );
       } else {
         // Local file
-        final file = File(imageUrl);
+        final file = File(mediaUrl);
         if (file.existsSync()) {
           return Image.file(
             file,
@@ -103,7 +103,7 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
         } else {
           // If file doesn't exist, try to load from assets
           return Image.asset(
-            imageUrl,
+            mediaUrl,
             width: 60,
             height: 60,
             fit: BoxFit.cover,
@@ -189,7 +189,7 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
                               context,
                               MaterialPageRoute(
                                 builder: (context) => ChatScreen(
-                                  imageFile: File(conversation.imageUrl),
+                                  mediaFile: File(conversation.imageUrl),
                                   conversationId: conversation.id,
                                   isVideo: conversation.isVideo,
                                 ),
