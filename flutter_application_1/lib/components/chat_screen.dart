@@ -1,15 +1,18 @@
 import 'dart:async';
 import 'dart:io';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter_application_1/components/conversation_model.dart';
-import 'package:flutter_tts/flutter_tts.dart';
-import 'package:speech_to_text/speech_to_text.dart' as stt;
-import 'package:ffmpeg_kit_flutter/ffmpeg_kit.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:flutter_tts/flutter_tts.dart';
+import 'package:video_player/video_player.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:flutter_image_compress/flutter_image_compress.dart';
+import 'package:flutter_application_1/components/conversation_model.dart';
+import 'package:video_thumbnail/video_thumbnail.dart';
+
 
 class ChatScreen extends StatefulWidget {
   final File mediaFile;
@@ -38,6 +41,7 @@ class _ChatScreenState extends State<ChatScreen> {
   String? _videoCaption;
   File? _representativeFrame;
   bool _captionGenerated = false;
+  late VideoPlayerController _videoPlayerController;
 
   @override
   void initState() {
@@ -51,12 +55,25 @@ class _ChatScreenState extends State<ChatScreen> {
     } else {
       _sendMedia();
     }
+    if (widget.isVideo) {
+      _initializeVideoPlayer();
+    }
+  }
+
+  void _initializeVideoPlayer() {
+    _videoPlayerController = VideoPlayerController.file(_currentImage!)
+      ..initialize().then((_) {
+        setState(() {});
+      });
   }
 
   @override
   void dispose() {
     _stopListening();
     _tapTimer?.cancel();
+    if (widget.isVideo) {
+      _videoPlayerController.dispose();
+    }
     super.dispose();
   }
 
@@ -110,6 +127,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
     if (widget.isVideo) {
       _videoCaption = await _getVideoCaption(_currentImage!);
+      _representativeFrame = await extractRepresentativeFrame(_currentImage!);
       setState(() {
         _messages.add({
           'type': 'response',
@@ -149,12 +167,16 @@ class _ChatScreenState extends State<ChatScreen> {
 
     String response;
     if (widget.isVideo) {
+      print("Video file path: ${_currentImage!.path}");
+      print("Video file exists: ${await _currentImage!.exists()}");
+      
       if (_representativeFrame == null) {
         _representativeFrame = await extractRepresentativeFrame(_currentImage!);
       }
       if (_representativeFrame != null) {
         response = await _getVQAResponse("$_videoCaption. $message", _representativeFrame!);
       } else {
+        print("Failed to extract representative frame");
         response = "Sorry, I couldn't process the video frame. Please try again.";
       }
     } else {
@@ -190,10 +212,10 @@ class _ChatScreenState extends State<ChatScreen> {
     await flutterTts.speak(response);
   }
 
-  Future<String> _getVQAResponse(String question, File image) async {
-    var request = http.MultipartRequest('POST', Uri.parse('https://8206-35-231-149-136.ngrok-free.app/vqa'));
+  Future<String> _getVQAResponse(String question, File imageOrFrame) async {
+    var request = http.MultipartRequest('POST', Uri.parse('https://0fb8-35-231-149-136.ngrok-free.app/vqa'));
     request.fields['question'] = question;
-    request.files.add(await http.MultipartFile.fromPath('image', image.path));
+    request.files.add(await http.MultipartFile.fromPath('image', imageOrFrame.path));
 
     var response = await request.send();
     if (response.statusCode == 200) {
@@ -205,8 +227,9 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+
   Future<String> _getVideoCaption(File video) async {
-    var captionRequest = http.MultipartRequest('POST', Uri.parse('https://8206-35-231-149-136.ngrok-free.app/caption'));
+    var captionRequest = http.MultipartRequest('POST', Uri.parse('https://0fb8-35-231-149-136.ngrok-free.app/caption'));
     captionRequest.files.add(await http.MultipartFile.fromPath('video', video.path));
 
     var captionResponse = await captionRequest.send();
@@ -222,22 +245,43 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<File?> extractRepresentativeFrame(File video) async {
     try {
       final tempDir = await getTemporaryDirectory();
-      final framePath = '${tempDir.path}/representative_frame.jpg';
-      
-      final result = await FFmpegKit.execute('-i ${video.path} -vf select=\'eq(n,0)\' -vframes 1 $framePath');
-      
-      if (await result.getReturnCode() == 0) {
-        return File(framePath);
-      } else {
-        print('FFmpeg process exited with error: ${await result.getOutput()}');
+      final thumbnailPath = await VideoThumbnail.thumbnailFile(
+        video: video.path,
+        thumbnailPath: tempDir.path,
+        imageFormat: ImageFormat.JPEG,
+        maxWidth: 224,
+        quality: 75,
+      );
+
+      if (thumbnailPath == null) {
+        print('Failed to generate thumbnail');
         return null;
       }
+
+      final file = File(thumbnailPath);
+
+      // Ensure the image is exactly 224x224
+      final compressedBytes = await FlutterImageCompress.compressWithFile(
+        file.path,
+        minWidth: 224,
+        minHeight: 224,
+        quality: 90,
+      );
+
+      if (compressedBytes == null) {
+        print('Failed to compress image');
+        return null;
+      }
+
+      await file.writeAsBytes(compressedBytes);
+
+      return file;
     } catch (e) {
       print('Error extracting frame: $e');
       return null;
     }
   }
-  
+
   Future<void> _stopListening() async {
     await _speechToText.stop();
     setState(() {
