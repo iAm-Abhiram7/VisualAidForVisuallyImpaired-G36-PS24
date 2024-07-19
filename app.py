@@ -12,8 +12,9 @@ import torch.quantization
 import tempfile
 import logging
 from pyngrok import ngrok
+from config import NGROK_AUTH_TOKEN
 
-ngrok.set_auth_token("2e1rwbupsn5xwgSnPwmDcO365Xq_4qNZ8jVd6PwCXYi2A6ijG")
+ngrok.set_auth_token(NGROK_AUTH_TOKEN)
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
@@ -116,7 +117,7 @@ if __name__ == '__main__':
 
     port = 5000
     public_url = ngrok.connect(port).public_url
-    print(f" * ngrok tunnel "{public_url}" -> "http://127.0.0.1:{port}"")
+    print(f" * ngrok tunnel \"{public_url}\" -> \"http://127.0.0.1:{port}\"")
 
     # Update any base_url with the public_url
     app.config['BASE_URL'] = public_url

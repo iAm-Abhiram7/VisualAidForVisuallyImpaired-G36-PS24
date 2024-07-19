@@ -191,7 +191,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<String> _getVQAResponse(String question, File image) async {
-    var request = http.MultipartRequest('POST', Uri.parse('https://3868-34-74-237-14.ngrok-free.app/vqa'));
+    var request = http.MultipartRequest('POST', Uri.parse('https://8206-35-231-149-136.ngrok-free.app/vqa'));
     request.fields['question'] = question;
     request.files.add(await http.MultipartFile.fromPath('image', image.path));
 
@@ -206,7 +206,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<String> _getVideoCaption(File video) async {
-    var captionRequest = http.MultipartRequest('POST', Uri.parse('https://3868-34-74-237-14.ngrok-free.app/caption'));
+    var captionRequest = http.MultipartRequest('POST', Uri.parse('https://8206-35-231-149-136.ngrok-free.app/caption'));
     captionRequest.files.add(await http.MultipartFile.fromPath('video', video.path));
 
     var captionResponse = await captionRequest.send();
