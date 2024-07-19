@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:video_player/video_player.dart';
 import 'login.dart';
 import 'chat_screen.dart';
 
@@ -18,6 +19,13 @@ class _ImagePickerScreenState extends State<ImagePickerScreen> {
   final picker = ImagePicker();
   final String _description = '';
   bool isVideo = false;
+  VideoPlayerController? _videoPlayerController;
+
+  @override
+  void dispose() {
+    _videoPlayerController?.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -104,15 +112,33 @@ class _ImagePickerScreenState extends State<ImagePickerScreen> {
                         ),
                       )
                     : isVideo
-                        ? Center(
-                            child: Icon(Icons.video_file, size: 100),
-                          )
+                        ? _videoPlayerController != null && _videoPlayerController!.value.isInitialized
+                            ? AspectRatio(
+                                aspectRatio: _videoPlayerController!.value.aspectRatio,
+                                child: VideoPlayer(_videoPlayerController!),
+                              )
+                            : CircularProgressIndicator()
                         : Image.file(
                             selectedFile!,
                             semanticLabel: 'Selected image',
                             fit: BoxFit.cover,
                           ),
               ),
+              if (isVideo && _videoPlayerController != null)
+                IconButton(
+                  icon: Icon(
+                    _videoPlayerController!.value.isPlaying ? Icons.pause : Icons.play_arrow,
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      if (_videoPlayerController!.value.isPlaying) {
+                        _videoPlayerController!.pause();
+                      } else {
+                        _videoPlayerController!.play();
+                      }
+                    });
+                  },
+                ),
               const SizedBox(height: 30),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -138,6 +164,14 @@ class _ImagePickerScreenState extends State<ImagePickerScreen> {
         selectedFile = File(pickedFile.path);
         this.isVideo = isVideo;
       });
+
+      if (isVideo) {
+        _videoPlayerController = VideoPlayerController.file(selectedFile!)
+          ..initialize().then((_) {
+            setState(() {});
+            _videoPlayerController!.play();
+          });
+      }
 
       Navigator.push(
         context,

@@ -13,7 +13,6 @@ import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:flutter_application_1/components/conversation_model.dart';
 import 'package:video_thumbnail/video_thumbnail.dart';
 
-
 class ChatScreen extends StatefulWidget {
   final File mediaFile;
   final String? conversationId;
@@ -227,7 +226,6 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-
   Future<String> _getVideoCaption(File video) async {
     var captionRequest = http.MultipartRequest('POST', Uri.parse('https://0fb8-35-231-149-136.ngrok-free.app/caption'));
     captionRequest.files.add(await http.MultipartFile.fromPath('video', video.path));
@@ -352,12 +350,34 @@ class _ChatScreenState extends State<ChatScreen> {
           child: Container(
             padding: EdgeInsets.all(16),
             margin: EdgeInsets.all(10),
-            child: Icon(Icons.video_file, size: 100),
+            child: _videoPlayerController.value.isInitialized
+                ? AspectRatio(
+                    aspectRatio: _videoPlayerController.value.aspectRatio,
+                    child: VideoPlayer(_videoPlayerController),
+                  )
+                : CircularProgressIndicator(),
           ),
         );
       default:
         return Container();
     }
+  }
+
+  Widget _buildVideoControls() {
+    return IconButton(
+      icon: Icon(
+        _videoPlayerController.value.isPlaying ? Icons.pause : Icons.play_arrow,
+      ),
+      onPressed: () {
+        setState(() {
+          if (_videoPlayerController.value.isPlaying) {
+            _videoPlayerController.pause();
+          } else {
+            _videoPlayerController.play();
+          }
+        });
+      },
+    );
   }
 
   void _listen() async {
@@ -420,6 +440,7 @@ class _ChatScreenState extends State<ChatScreen> {
         behavior: HitTestBehavior.opaque,
         child: Column(
           children: [
+            if (widget.isVideo) _buildVideoControls(),
             Expanded(
               child: ListView.builder(
                 controller: _scrollController,

@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_application_1/components/conversation_model.dart';
 import 'chat_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:video_player/video_player.dart';
 
 class ChatHistoryScreen extends StatefulWidget {
   @override
@@ -13,11 +14,20 @@ class ChatHistoryScreen extends StatefulWidget {
 class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
   List<Conversation> conversations = [];
   String? currentUserId;
+  Map<String, VideoPlayerController> videoControllers = {};
 
   @override
   void initState() {
     super.initState();
     _getCurrentUser();
+  }
+
+  @override
+  void dispose() {
+    for (var controller in videoControllers.values) {
+      controller.dispose();
+    }
+    super.dispose();
   }
 
   Future<void> _getCurrentUser() async {
@@ -44,6 +54,20 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
     setState(() {
       conversations = conversationsList;
     });
+
+    for (var conversation in conversations) {
+      if (conversation.isVideo) {
+        _initializeVideoController(conversation.id!, conversation.imageUrl);
+      }
+    }
+  }
+
+  void _initializeVideoController(String id, String videoUrl) {
+    final controller = VideoPlayerController.file(File(videoUrl));
+    videoControllers[id] = controller;
+    controller.initialize().then((_) {
+      setState(() {});
+    });
   }
 
   Future<void> _deleteConversation(String? conversationId) async {
@@ -54,16 +78,33 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
         .collection('conversations')
         .doc(conversationId)
         .delete();
+    if (videoControllers.containsKey(conversationId)) {
+      await videoControllers[conversationId]!.dispose();
+      videoControllers.remove(conversationId);
+    }
     _getConversations(); // Refresh the list after deletion
   }
 
-  Widget _buildMediaWidget(String mediaUrl, bool isVideo) {
+  Widget _buildMediaWidget(String mediaUrl, bool isVideo, String? conversationId) {
     if (isVideo) {
+      if (conversationId != null && videoControllers.containsKey(conversationId)) {
+        final controller = videoControllers[conversationId]!;
+        if (controller.value.isInitialized) {
+          return SizedBox(
+            width: 60,
+            height: 60,
+            child: AspectRatio(
+              aspectRatio: controller.value.aspectRatio,
+              child: VideoPlayer(controller),
+            ),
+          );
+        }
+      }
       return Container(
         width: 60,
         height: 60,
         color: Colors.black,
-        child: Icon(Icons.play_circle_fill, color: Colors.white, size: 30),
+        child: Center(child: CircularProgressIndicator()),
       );
     } else {
       if (mediaUrl.startsWith('http://') || mediaUrl.startsWith('https://')) {
@@ -143,7 +184,7 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
               child: ExpansionTile(
                 leading: ClipRRect(
                   borderRadius: BorderRadius.circular(8),
-                  child: _buildMediaWidget(conversation.imageUrl, conversation.isVideo),
+                  child: _buildMediaWidget(conversation.imageUrl, conversation.isVideo, conversation.id),
                 ),
                 title: Text(
                   conversation.imageDescription,
