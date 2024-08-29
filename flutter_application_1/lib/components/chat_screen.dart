@@ -124,17 +124,25 @@ class _ChatScreenState extends State<ChatScreen> {
 
     _scrollToBottom();
 
-    if (widget.isVideo) {
-      _videoCaption = await _getVideoCaption(_currentImage!);
-      _representativeFrame = await extractRepresentativeFrame(_currentImage!);
-      setState(() {
-        _messages.add({
-          'type': 'response',
-          'message': "Video caption: $_videoCaption",
-        });
-        _captionGenerated = true;
+  if (widget.isVideo) {
+    setState(() {
+      _messages.add({
+        'type': 'loading',
+        'message': '',
       });
-    }
+    });
+    _videoCaption = await _getVideoCaption(_currentImage!);
+    _representativeFrame = await extractRepresentativeFrame(_currentImage!);
+    setState(() {
+      // Remove the loading message
+      _messages.removeLast();
+      _messages.add({
+        'type': 'response',
+        'message': "$_videoCaption",
+      });
+      _captionGenerated = true;
+    });
+  }
 
     final conversation = Conversation(
       userId: user.uid,
@@ -159,6 +167,10 @@ class _ChatScreenState extends State<ChatScreen> {
         'type': 'user',
         'message': message,
       });
+      _messages.add({
+        'type': 'loading',
+        'message': '',
+    });
     });
 
     _textController.clear();
@@ -183,6 +195,7 @@ class _ChatScreenState extends State<ChatScreen> {
     }
 
     setState(() {
+      _messages.removeWhere((msg) => msg['type'] == 'loading');
       _messages.add({
         'type': 'response',
         'message': response,
@@ -212,7 +225,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<String> _getVQAResponse(String question, File imageOrFrame) async {
-    var request = http.MultipartRequest('POST', Uri.parse('https://0fb8-35-231-149-136.ngrok-free.app/vqa'));
+    var request = http.MultipartRequest('POST', Uri.parse('https://d1c1-34-86-1-216.ngrok-free.app/vqa'));
     request.fields['question'] = question;
     request.files.add(await http.MultipartFile.fromPath('image', imageOrFrame.path));
 
@@ -227,7 +240,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<String> _getVideoCaption(File video) async {
-    var captionRequest = http.MultipartRequest('POST', Uri.parse('https://0fb8-35-231-149-136.ngrok-free.app/caption'));
+    var captionRequest = http.MultipartRequest('POST', Uri.parse('https://d1c1-34-86-1-216.ngrok-free.app/caption'));
     captionRequest.files.add(await http.MultipartFile.fromPath('video', video.path));
 
     var captionResponse = await captionRequest.send();
@@ -358,6 +371,32 @@ class _ChatScreenState extends State<ChatScreen> {
                 : CircularProgressIndicator(),
           ),
         );
+        case 'loading':
+          return Align(
+            alignment: Alignment.centerLeft,
+            child: Container(
+              padding: EdgeInsets.all(16),
+              margin: EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text("   ", style: TextStyle(fontSize: 18)),
+                  SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.grey),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
       default:
         return Container();
     }
